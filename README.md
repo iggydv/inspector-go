@@ -1,6 +1,6 @@
- # InspectGo
+# Inspector-Go
  
- InspectGo is a Go-based evaluation framework for LLMs.
+Inspector-Go is a Go-based evaluation framework for LLMs.
  
  ## Local MVP
  
@@ -48,4 +48,7 @@ The CLI can emit Inspect-style JSON logs for use with Inspect tools:
 ```sh
 go run ./cmd/inspectgo eval --dataset ./examples/math/dataset.jsonl --log-format inspect-eval --log-dir ./logs
 ```
+
+These `.eval` logs are compatible with the Inspect-AI VS Code extension and the
+Inspect-AI CLI log tools (`inspect view`, `inspect log list`, `inspect log dump`).
  

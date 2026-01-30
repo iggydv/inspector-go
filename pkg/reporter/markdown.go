@@ -12,7 +12,7 @@ type MarkdownReporter struct {
 }
 
 func (r MarkdownReporter) Report(report core.EvalReport) error {
-	if _, err := fmt.Fprintf(r.Writer, "# InspectGo Report\n\n"); err != nil {
+	if _, err := fmt.Fprintf(r.Writer, "# Inspector-Go Report\n\n"); err != nil {
 		return err
 	}
 	if _, err := fmt.Fprintf(r.Writer, "- Task: %s\n- Model: %s\n- Scorer: %s\n\n", report.TaskName, report.ModelName, report.ScorerName); err != nil {

@@ -1,6 +1,6 @@
- # Core
+# Core
  
- The core package defines the primary interfaces and types used by InspectGo.
+The core package defines the primary interfaces and types used by Inspector-Go.
  
  ## Interfaces
  

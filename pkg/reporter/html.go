@@ -15,7 +15,7 @@ type HTMLReporter struct {
 func (r HTMLReporter) Report(report core.EvalReport) error {
 	title := r.Title
 	if title == "" {
-		title = "InspectGo Report"
+		title = "Inspector-Go Report"
 	}
 
 	data := struct {
