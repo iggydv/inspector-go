@@ -1,0 +1,22 @@
+ dataset: ./examples/math/dataset.jsonl
+ scorer: exact
+ workers: 2
+ format: table
+log_dir: ./logs
+log_format: inspect-eval
+provider: mock
+ model:
+   name: mock
+   mock_response: ""
+openai:
+  model: gpt-4o-mini
+  timeout_seconds: 30
+  max_retries: 2
+  backoff_millis: 500
+anthropic:
+  model: claude-3-5-haiku-latest
+  timeout_seconds: 30
+  max_retries: 2
+  backoff_millis: 500
+  max_tokens: 1024
+ 
