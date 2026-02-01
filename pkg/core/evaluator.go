@@ -11,10 +11,12 @@ import (
 
 // Evaluator runs a dataset through a solver and scorer.
 type Evaluator struct {
-	Dataset Dataset
-	Solver  Solver
-	Scorer  Scorer
-	Workers int
+	Dataset      Dataset
+	Solver       Solver
+	Scorer       Scorer
+	Workers      int
+	Progress     func(completed, total int)
+	TotalSamples int
 }
 
 // Run executes an evaluation and returns a report.
@@ -89,6 +91,9 @@ func (e *Evaluator) Run(ctx context.Context) (EvalReport, error) {
 				return report, nil
 			}
 			results = append(results, result)
+			if e.Progress != nil {
+				e.Progress(len(results), e.TotalSamples)
+			}
 		}
 	}
 }

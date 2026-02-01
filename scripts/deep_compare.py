@@ -62,8 +62,8 @@ def json_lines(obj: object) -> list[str]:
 
 def main() -> None:
     root = Path(__file__).resolve().parents[1]
-    py_log = resolve_log_dir(root / "zips" / "py")
-    go_log = resolve_log_dir(root / "zips" / "go")
+    py_log = resolve_log_dir(root / "scripts" / "debug" / "py")
+    go_log = resolve_log_dir(root / "scripts" / "debug" / "go")
 
     py_data = normalize_summaries(load_archive(py_log))
     go_data = normalize_summaries(load_archive(go_log))

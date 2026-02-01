@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 	"time"
 
 	"inspectgo/pkg/core"
@@ -16,6 +17,7 @@ import (
 	"inspectgo/pkg/scorer"
 	"inspectgo/pkg/solver"
 
+	"github.com/charmbracelet/lipgloss"
 	"github.com/spf13/cobra"
 )
 
@@ -138,11 +140,22 @@ func newEvalCommand() *cobra.Command {
 				PromptTemplate: promptTemplateResolved,
 			}
 
+			totalSamples := 0
+			if count, err := ds.Len(context.Background()); err == nil {
+				totalSamples = count
+			}
+
+			progress := newProgressBar(os.Stderr, totalSamples)
+
 			eval := core.Evaluator{
-				Dataset: ds,
-				Solver:  sv,
-				Scorer:  sc,
-				Workers: workerCount,
+				Dataset:      ds,
+				Solver:       sv,
+				Scorer:       sc,
+				Workers:      workerCount,
+				TotalSamples: totalSamples,
+				Progress: func(completed, total int) {
+					progress.Update(completed)
+				},
 			}
 
 			report, err := eval.Run(context.Background())
@@ -243,6 +256,45 @@ func writeInspectLog(format string, logDir string, report core.EvalReport) error
 		return nil
 	default:
 		return fmt.Errorf("unknown log format: %s", format)
+	}
+}
+
+type progressBar struct {
+	writer io.Writer
+	total  int
+	start  time.Time
+}
+
+func newProgressBar(writer io.Writer, total int) *progressBar {
+	return &progressBar{
+		writer: writer,
+		total:  total,
+		start:  time.Now(),
+	}
+}
+
+func (p *progressBar) Update(completed int) {
+	if p.total <= 0 {
+		return
+	}
+
+	width := 30
+	ratio := float64(completed) / float64(p.total)
+	if ratio > 1 {
+		ratio = 1
+	}
+	filled := int(ratio * float64(width))
+
+	bar := strings.Repeat("=", filled) + strings.Repeat(".", width-filled)
+	percent := int(ratio * 100)
+	elapsed := time.Since(p.start).Truncate(time.Second)
+
+	barStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("62"))
+	line := fmt.Sprintf("[%s] %3d%% (%d/%d) %s", barStyle.Render(bar), percent, completed, p.total, elapsed)
+	fmt.Fprintf(p.writer, "\r%s", line)
+
+	if completed >= p.total {
+		fmt.Fprintln(p.writer)
 	}
 }
 

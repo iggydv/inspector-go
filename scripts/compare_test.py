@@ -11,8 +11,9 @@ from inspect_ai.solver import generate, system_message
 
 @task
 def simple_math():
+    root = Path(__file__).resolve().parents[1]
     dataset = json_dataset(
-        "examples/math/dataset.jsonl",
+        str(root / "examples" / "math" / "dataset.jsonl"),
         FieldSpec(input="input", target="expected", id="id"),
     )
     return Task(
@@ -37,8 +38,9 @@ def clear_directory(path: Path) -> None:
 
 if __name__ == "__main__":
     root = Path(__file__).resolve().parents[1]
-    log_dir = root / "scripts" / "debug" / "py_eval"
-    extract_dir = root / "scripts" / "debug" / "py"
+    debug_dir = root / "scripts" / "debug"
+    log_dir = debug_dir / "py_eval"
+    extract_dir = debug_dir / "py"
 
     log_dir.mkdir(parents=True, exist_ok=True)
     extract_dir.mkdir(parents=True, exist_ok=True)
