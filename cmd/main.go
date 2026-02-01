@@ -1,9 +1,8 @@
 package main
 
 import (
+	"inspectgo/cmd/commands"
 	"os"
-
-	"inspectgo/cmd/inspectgo/commands"
 )
 
 func main() {

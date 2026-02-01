@@ -1,13 +1,13 @@
- dataset: ./examples/math/dataset.jsonl
- scorer: exact
- workers: 2
- format: table
+dataset: ./examples/math/dataset.jsonl
+scorer: exact
+workers: 2
+format: table
 log_dir: ./logs
 log_format: inspect-eval
 provider: mock
- model:
-   name: mock
-   mock_response: ""
+model:
+  name: mock
+  mock_response: ""
 openai:
   model: gpt-4o-mini
   timeout_seconds: 30

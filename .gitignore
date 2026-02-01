@@ -6,4 +6,11 @@
  *.test
  .DS_Store
  .env
- 
+
+/log_comparison_report.diff
+/scripts/debug/
+/logs/
+/logs_python/
+.idea
+logs
+.DS_Store
