@@ -63,8 +63,9 @@ type Metrics struct {
 
 // GenerateOptions controls model generation behavior.
 type GenerateOptions struct {
-	Temperature float32  `json:"temperature" yaml:"temperature"`
-	MaxTokens   int      `json:"max_tokens" yaml:"max_tokens"`
-	TopP        float32  `json:"top_p" yaml:"top_p"`
-	Stop        []string `json:"stop" yaml:"stop"`
+	Temperature  float32  `json:"temperature" yaml:"temperature"`
+	MaxTokens    int      `json:"max_tokens" yaml:"max_tokens"`
+	TopP         float32  `json:"top_p" yaml:"top_p"`
+	Stop         []string `json:"stop" yaml:"stop"`
+	SystemPrompt string   `json:"system_prompt,omitempty" yaml:"system_prompt,omitempty"`
 }

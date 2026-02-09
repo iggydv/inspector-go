@@ -63,6 +63,14 @@ func (f FewShotSolver) Solve(ctx context.Context, sample core.Sample) (core.Resp
 	}
 	parts = append(parts, prompt)
 
+	opts := f.Options
+	if opts.SystemPrompt == "" {
+		opts.SystemPrompt = "Answer the question following the pattern shown in the examples. Return only the final answer."
+	}
+	if opts.MaxTokens == 0 {
+		opts.MaxTokens = 256
+	}
+
 	fullPrompt := strings.Join(parts, separator)
-	return f.Model.Generate(ctx, fullPrompt, f.Options)
+	return f.Model.Generate(ctx, fullPrompt, opts)
 }

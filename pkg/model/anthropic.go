@@ -79,6 +79,20 @@ func (a AnthropicModel) Generate(ctx context.Context, prompt string, opts core.G
 			anthropic.NewUserMessage(anthropic.NewTextBlock(prompt)),
 		},
 	}
+	if opts.SystemPrompt != "" {
+		params.System = []anthropic.TextBlockParam{
+			{Text: opts.SystemPrompt},
+		}
+	}
+	if opts.Temperature > 0 {
+		params.Temperature = anthropic.Float(float64(opts.Temperature))
+	}
+	if opts.TopP > 0 {
+		params.TopP = anthropic.Float(float64(opts.TopP))
+	}
+	if len(opts.Stop) > 0 {
+		params.StopSequences = opts.Stop
+	}
 
 	var lastErr error
 	for attempt := 0; attempt <= maxRetries; attempt++ {

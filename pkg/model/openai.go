@@ -65,11 +65,21 @@ func (o OpenAIModel) Generate(ctx context.Context, prompt string, opts core.Gene
 		backoff = 500 * time.Millisecond
 	}
 
+	var messages []openai.ChatCompletionMessage
+	if opts.SystemPrompt != "" {
+		messages = append(messages, openai.ChatCompletionMessage{
+			Role:    openai.ChatMessageRoleSystem,
+			Content: opts.SystemPrompt,
+		})
+	}
+	messages = append(messages, openai.ChatCompletionMessage{
+		Role:    openai.ChatMessageRoleUser,
+		Content: prompt,
+	})
+
 	req := openai.ChatCompletionRequest{
-		Model: modelName,
-		Messages: []openai.ChatCompletionMessage{
-			{Role: openai.ChatMessageRoleUser, Content: prompt},
-		},
+		Model:    modelName,
+		Messages: messages,
 	}
 	if opts.Temperature > 0 {
 		req.Temperature = opts.Temperature

@@ -5,6 +5,8 @@ import (
 	"fmt"
 
 	"inspectgo/pkg/core"
+
+	"golang.org/x/sync/errgroup"
 )
 
 // SelfConsistencySolver samples multiple responses and picks the majority.
@@ -38,13 +40,21 @@ func (s SelfConsistencySolver) Solve(ctx context.Context, sample core.Sample) (c
 		})
 	}
 
-	responses := make([]core.Response, 0, count)
+	responses := make([]core.Response, count)
+	g, gctx := errgroup.WithContext(ctx)
 	for i := 0; i < count; i++ {
-		response, err := s.Model.Generate(ctx, prompt, s.Options)
-		if err != nil {
-			return core.Response{}, err
-		}
-		responses = append(responses, response)
+		i := i
+		g.Go(func() error {
+			resp, err := s.Model.Generate(gctx, prompt, s.Options)
+			if err != nil {
+				return err
+			}
+			responses[i] = resp
+			return nil
+		})
+	}
+	if err := g.Wait(); err != nil {
+		return core.Response{}, err
 	}
 
 	best := responses[0]
@@ -55,6 +65,13 @@ func (s SelfConsistencySolver) Solve(ctx context.Context, sample core.Sample) (c
 			best = response
 		}
 	}
+
+	// Aggregate token usage across all samples
+	var totalUsage core.TokenUsage
+	for _, resp := range responses {
+		totalUsage = addTokenUsage(totalUsage, resp.TokenUsage)
+	}
+	best.TokenUsage = totalUsage
 
 	return best, nil
 }

@@ -6,17 +6,21 @@ import (
 	"math"
 	"sort"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
 // Evaluator runs a dataset through a solver and scorer.
 type Evaluator struct {
-	Dataset      Dataset
-	Solver       Solver
-	Scorer       Scorer
-	Workers      int
-	Progress     func(completed, total int)
-	TotalSamples int
+	Dataset        Dataset
+	Solver         Solver
+	Scorer         Scorer
+	Workers        int
+	Progress       func(completed, total, inflight int)
+	TotalSamples   int
+	RateLimiter    RateLimiter
+	SampleTimeout  time.Duration
+	MaxTotalTokens int
 }
 
 // Run executes an evaluation and returns a report.
@@ -31,24 +35,61 @@ func (e *Evaluator) Run(ctx context.Context) (EvalReport, error) {
 	}
 
 	started := time.Now()
-	sampleCh, errCh := e.Dataset.Samples(ctx)
+
+	runCtx, runCancel := context.WithCancel(ctx)
+	defer runCancel()
+
+	sampleCh, errCh := e.Dataset.Samples(runCtx)
 
 	resultsCh := make(chan EvalResult, workers)
 	var wg sync.WaitGroup
+	var completed int64
+	var inflight int64
 
 	worker := func() {
 		defer wg.Done()
 		for sample := range sampleCh {
 			select {
-			case <-ctx.Done():
+			case <-runCtx.Done():
 				return
 			default:
 			}
 
-			result := evaluateSample(ctx, e.Solver, e.Scorer, sample)
+			if e.RateLimiter != nil {
+				if err := e.RateLimiter.Wait(runCtx); err != nil {
+					return
+				}
+			}
+
+			currentInflight := atomic.AddInt64(&inflight, 1)
+			if e.Progress != nil {
+				e.Progress(int(atomic.LoadInt64(&completed)), e.TotalSamples, int(currentInflight))
+			}
+
+			sampleCtx := runCtx
+			var sampleCancel context.CancelFunc
+			if e.SampleTimeout > 0 {
+				sampleCtx, sampleCancel = context.WithTimeout(runCtx, e.SampleTimeout)
+			}
+			result := evaluateSample(sampleCtx, e.Solver, e.Scorer, sample)
+			timedOut := sampleCtx.Err() != nil && sampleCancel != nil
+			if sampleCancel != nil {
+				sampleCancel()
+			}
+			if result.Error == "" && timedOut {
+				result.Error = "sample timeout"
+			}
 			select {
 			case resultsCh <- result:
-			case <-ctx.Done():
+				currentInflight = atomic.AddInt64(&inflight, -1)
+				if e.Progress != nil {
+					e.Progress(int(atomic.LoadInt64(&completed)), e.TotalSamples, int(currentInflight))
+				}
+			case <-runCtx.Done():
+				currentInflight = atomic.AddInt64(&inflight, -1)
+				if e.Progress != nil {
+					e.Progress(int(atomic.LoadInt64(&completed)), e.TotalSamples, int(currentInflight))
+				}
 				return
 			}
 		}
@@ -66,6 +107,7 @@ func (e *Evaluator) Run(ctx context.Context) (EvalReport, error) {
 
 	var results []EvalResult
 	var datasetErr error
+	var cumulativeTokens int
 	for {
 		select {
 		case <-ctx.Done():
@@ -92,7 +134,14 @@ func (e *Evaluator) Run(ctx context.Context) (EvalReport, error) {
 			}
 			results = append(results, result)
 			if e.Progress != nil {
-				e.Progress(len(results), e.TotalSamples)
+				currentCompleted := atomic.AddInt64(&completed, 1)
+				e.Progress(int(currentCompleted), e.TotalSamples, int(atomic.LoadInt64(&inflight)))
+			}
+			if e.MaxTotalTokens > 0 {
+				cumulativeTokens += result.Response.TokenUsage.TotalTokens
+				if cumulativeTokens >= e.MaxTotalTokens {
+					runCancel()
+				}
 			}
 		}
 	}

@@ -3,6 +3,7 @@ package solver
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"inspectgo/pkg/core"
 )
@@ -37,8 +38,10 @@ func (m MultiStepSolver) Solve(ctx context.Context, sample core.Sample) (core.Re
 		stepTemplate = "Step {{step}}/{{total}}:\nInput: {{input}}\nPrevious: {{previous}}\nAnswer:"
 	}
 
-	var lastResponse core.Response
+	var totalUsage core.TokenUsage
+	var totalLatency time.Duration
 	previous := ""
+
 	for i := 1; i <= steps; i++ {
 		prompt := applyTemplate(stepTemplate, map[string]string{
 			"step":     fmt.Sprintf("%d", i),
@@ -50,7 +53,8 @@ func (m MultiStepSolver) Solve(ctx context.Context, sample core.Sample) (core.Re
 		if err != nil {
 			return core.Response{}, err
 		}
-		lastResponse = response
+		totalUsage = addTokenUsage(totalUsage, response.TokenUsage)
+		totalLatency += response.Latency
 		previous = response.Content
 	}
 
@@ -59,8 +63,22 @@ func (m MultiStepSolver) Solve(ctx context.Context, sample core.Sample) (core.Re
 			"input":    sample.Input,
 			"previous": previous,
 		})
-		return m.Model.Generate(ctx, finalPrompt, m.Options)
+		finalResp, err := m.Model.Generate(ctx, finalPrompt, m.Options)
+		if err != nil {
+			return core.Response{}, err
+		}
+		totalUsage = addTokenUsage(totalUsage, finalResp.TokenUsage)
+		totalLatency += finalResp.Latency
+		return core.Response{
+			Content:    finalResp.Content,
+			TokenUsage: totalUsage,
+			Latency:    totalLatency,
+		}, nil
 	}
 
-	return lastResponse, nil
+	return core.Response{
+		Content:    previous,
+		TokenUsage: totalUsage,
+		Latency:    totalLatency,
+	}, nil
 }
