@@ -88,10 +88,6 @@ func newEvalCommand() *cobra.Command {
 			workerCount := resolveInt(workers, appConfig.Workers, 1)
 
 			ds := dataset.NewFileDataset(path)
-			sc, err := buildScorer(scorerNameResolved)
-			if err != nil {
-				return err
-			}
 
 			totalSamples := 0
 			if count, err := ds.Len(context.Background()); err == nil {
@@ -170,6 +166,11 @@ func newEvalCommand() *cobra.Command {
 				TopP:        float32(topP),
 			}
 
+			sc, err := buildScorer(scorerNameResolved, evalModel, opts)
+			if err != nil {
+				return err
+			}
+
 			sv, err := buildSolver(solverName, evalModel, opts, promptTemplateResolved, fewshotCount, ds)
 			if err != nil {
 				return err
@@ -232,7 +233,7 @@ func newEvalCommand() *cobra.Command {
 	}
 
 	cmd.Flags().StringVar(&datasetPath, "dataset", "", "path to dataset file")
-	cmd.Flags().StringVar(&scorerName, "scorer", "", "scorer name (exact, includes, numeric)")
+	cmd.Flags().StringVar(&scorerName, "scorer", "", "scorer name (exact, includes, numeric, honesty, model-graded)")
 	cmd.Flags().IntVar(&workers, "workers", 0, "number of workers")
 	cmd.Flags().StringVar(&outputPath, "output", "", "output file path")
 	cmd.Flags().StringVar(&format, "format", "", "output format (table, json, html, markdown, csv)")
@@ -245,7 +246,7 @@ func newEvalCommand() *cobra.Command {
 	cmd.Flags().StringVar(&promptTemplate, "prompt-template", "", "prompt template with {{input}} placeholder")
 	cmd.Flags().StringVar(&logDir, "log-dir", "", "directory for Inspect-compatible logs")
 	cmd.Flags().StringVar(&logFormat, "log-format", "", "log format (inspect-eval, inspect-json, none)")
-	cmd.Flags().StringVar(&solverName, "solver", "", "solver name (basic, chain-of-thought, cot, few-shot, multi-step, self-consistency, self-critique); comma-separated for chaining")
+	cmd.Flags().StringVar(&solverName, "solver", "", "solver name (basic, chain-of-thought, cot, few-shot, multi-step, self-consistency, self-critique, sycophancy); comma-separated for chaining")
 	cmd.Flags().Float64Var(&temperature, "temperature", 0, "model temperature (0 = default)")
 	cmd.Flags().IntVar(&maxTokens, "max-tokens", 0, "max completion tokens (0 = solver default)")
 	cmd.Flags().Float64Var(&topP, "top-p", 0, "nucleus sampling top-p (0 = default)")
@@ -255,7 +256,7 @@ func newEvalCommand() *cobra.Command {
 	return cmd
 }
 
-func buildScorer(name string) (core.Scorer, error) {
+func buildScorer(name string, m core.Model, opts core.GenerateOptions) (core.Scorer, error) {
 	switch name {
 	case "exact":
 		return scorer.ExactMatch{CaseSensitive: false, NormalizeWhitespace: true}, nil
@@ -263,6 +264,10 @@ func buildScorer(name string) (core.Scorer, error) {
 		return scorer.Includes{CaseSensitive: false, NormalizeWhitespace: true}, nil
 	case "numeric":
 		return scorer.NumericMatch{}, nil
+	case "honesty":
+		return scorer.Honesty{CaseSensitive: false, NormalizeWhitespace: true}, nil
+	case "model-graded":
+		return scorer.ModelGraded{Judge: m, Options: opts}, nil
 	default:
 		return nil, fmt.Errorf("unknown scorer: %s", name)
 	}
@@ -350,6 +355,11 @@ func buildSingleSolver(name string, m core.Model, opts core.GenerateOptions, pro
 			Model:       m,
 			Options:     opts,
 			SkipInitial: chained,
+		}, nil
+	case "sycophancy":
+		return solver.SycophancySolver{
+			Model:   m,
+			Options: opts,
 		}, nil
 	default:
 		return nil, fmt.Errorf("unknown solver: %s", name)
