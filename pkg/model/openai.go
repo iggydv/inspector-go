@@ -7,7 +7,9 @@ import (
 	"os"
 	"time"
 
-	openai "github.com/sashabaranov/go-openai"
+	"github.com/openai/openai-go/v3"
+	"github.com/openai/openai-go/v3/option"
+	"github.com/openai/openai-go/v3/responses"
 
 	"inspectgo/pkg/core"
 )
@@ -15,7 +17,7 @@ import (
 const defaultOpenAIModel = "gpt-4o-mini"
 
 type OpenAIModel struct {
-	Client     *openai.Client
+	Client     openai.Client
 	Model      string
 	Timeout    time.Duration
 	MaxRetries int
@@ -31,7 +33,7 @@ func NewOpenAIModelFromEnv(modelName string) (*OpenAIModel, error) {
 		modelName = defaultOpenAIModel
 	}
 	return &OpenAIModel{
-		Client:     openai.NewClient(apiKey),
+		Client:     openai.NewClient(option.WithAPIKey(apiKey)),
 		Model:      modelName,
 		Timeout:    30 * time.Second,
 		MaxRetries: 2,
@@ -47,10 +49,6 @@ func (o OpenAIModel) Name() string {
 }
 
 func (o OpenAIModel) Generate(ctx context.Context, prompt string, opts core.GenerateOptions) (core.Response, error) {
-	if o.Client == nil {
-		return core.Response{}, errors.New("openai: client is required")
-	}
-
 	modelName := o.Name()
 	timeout := o.Timeout
 	if timeout <= 0 {
@@ -65,52 +63,44 @@ func (o OpenAIModel) Generate(ctx context.Context, prompt string, opts core.Gene
 		backoff = 500 * time.Millisecond
 	}
 
-	var messages []openai.ChatCompletionMessage
-	if opts.SystemPrompt != "" {
-		messages = append(messages, openai.ChatCompletionMessage{
-			Role:    openai.ChatMessageRoleSystem,
-			Content: opts.SystemPrompt,
-		})
+	params := responses.ResponseNewParams{
+		Model: openai.ChatModel(modelName),
+		Input: responses.ResponseNewParamsInputUnion{
+			OfString: openai.String(prompt),
+		},
+		Store: openai.Bool(false),
 	}
-	messages = append(messages, openai.ChatCompletionMessage{
-		Role:    openai.ChatMessageRoleUser,
-		Content: prompt,
-	})
-
-	req := openai.ChatCompletionRequest{
-		Model:    modelName,
-		Messages: messages,
+	if opts.SystemPrompt != "" {
+		params.Instructions = openai.String(opts.SystemPrompt)
 	}
 	if opts.Temperature > 0 {
-		req.Temperature = opts.Temperature
+		params.Temperature = openai.Float(float64(opts.Temperature))
 	}
 	if opts.MaxTokens > 0 {
-		req.MaxTokens = opts.MaxTokens
+		params.MaxOutputTokens = openai.Int(int64(opts.MaxTokens))
 	}
 	if opts.TopP > 0 {
-		req.TopP = opts.TopP
-	}
-	if len(opts.Stop) > 0 {
-		req.Stop = opts.Stop
+		params.TopP = openai.Float(float64(opts.TopP))
 	}
 
 	var lastErr error
 	for attempt := 0; attempt <= maxRetries; attempt++ {
 		attemptCtx, cancel := context.WithTimeout(ctx, timeout)
 		start := time.Now()
-		resp, err := o.Client.CreateChatCompletion(attemptCtx, req)
+		resp, err := o.Client.Responses.New(attemptCtx, params)
 		cancel()
 		if err == nil {
-			if len(resp.Choices) == 0 {
+			content := resp.OutputText()
+			if content == "" {
 				return core.Response{}, fmt.Errorf("openai: empty response")
 			}
 			usage := core.TokenUsage{
-				PromptTokens:     resp.Usage.PromptTokens,
-				CompletionTokens: resp.Usage.CompletionTokens,
-				TotalTokens:      resp.Usage.TotalTokens,
+				PromptTokens:     int(resp.Usage.InputTokens),
+				CompletionTokens: int(resp.Usage.OutputTokens),
+				TotalTokens:      int(resp.Usage.TotalTokens),
 			}
 			return core.Response{
-				Content:    resp.Choices[0].Message.Content,
+				Content:    content,
 				TokenUsage: usage,
 				Latency:    time.Since(start),
 			}, nil
