@@ -125,7 +125,7 @@ func (e *Evaluator) Run(ctx context.Context) (EvalReport, error) {
 					TaskName:   e.Dataset.Name(),
 					ModelName:  e.Solver.Name(),
 					ScorerName: e.Scorer.Name(),
-					Metrics:    calculateMetrics(results),
+					Metrics:    CalculateMetrics(results),
 					Results:    results,
 					StartedAt:  started,
 					FinishedAt: time.Now(),
@@ -168,7 +168,7 @@ func evaluateSample(ctx context.Context, solver Solver, scorer Scorer, sample Sa
 	return result
 }
 
-func calculateMetrics(results []EvalResult) Metrics {
+func CalculateMetrics(results []EvalResult) Metrics {
 	if len(results) == 0 {
 		return Metrics{}
 	}

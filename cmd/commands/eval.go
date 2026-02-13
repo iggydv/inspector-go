@@ -46,6 +46,7 @@ func newEvalCommand() *cobra.Command {
 		sampleTimeout  time.Duration
 		maxTotalTokens int
 		noCache        bool
+		retryLogPath   string
 	)
 
 	cmd := &cobra.Command{
@@ -53,8 +54,8 @@ func newEvalCommand() *cobra.Command {
 		Short: "Run an evaluation",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			path := resolveString(datasetPath, appConfig.Dataset)
-			if path == "" {
-				return errors.New("dataset path is required")
+			if path == "" && retryLogPath == "" {
+				return errors.New("dataset path is required (or use --retry)")
 			}
 			scorerNameResolved := resolveString(scorerName, appConfig.Scorer)
 			if scorerNameResolved == "" {
@@ -89,11 +90,38 @@ func newEvalCommand() *cobra.Command {
 			}
 			workerCount := resolveInt(workers, appConfig.Workers, 1)
 
-			ds := dataset.NewFileDataset(path)
-
-			totalSamples := 0
-			if count, err := ds.Len(context.Background()); err == nil {
-				totalSamples = count
+			var ds core.Dataset
+			var totalSamples int
+			var mergeReport *core.EvalReport
+			if retryLogPath != "" {
+				var log inspectlog.EvalLog
+				if strings.HasSuffix(strings.ToLower(retryLogPath), ".eval") {
+					var err error
+					log, err = inspectlog.ReadEval(retryLogPath)
+					if err != nil {
+						return fmt.Errorf("retry: read eval log: %w", err)
+					}
+				} else {
+					var err error
+					log, err = inspectlog.ReadJSON(retryLogPath)
+					if err != nil {
+						return fmt.Errorf("retry: read log: %w", err)
+					}
+				}
+				failed := inspectlog.FailedSamples(log)
+				if len(failed) == 0 {
+					fmt.Fprintln(cmd.ErrOrStderr(), "No failed or incomplete samples to retry.")
+					return nil
+				}
+				orig := inspectlog.LogToReport(log)
+				mergeReport = &orig
+				ds = dataset.NewSliceDataset(failed, "retry")
+				totalSamples = len(failed)
+			} else {
+				ds = dataset.NewFileDataset(path)
+				if count, err := ds.Len(context.Background()); err == nil {
+					totalSamples = count
+				}
 			}
 			progress := newProgressBar(progressWriter(cmd), totalSamples)
 			progress.Update(0, 0)
@@ -209,6 +237,23 @@ func newEvalCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			if mergeReport != nil {
+				byID := make(map[string]core.EvalResult)
+				for _, r := range mergeReport.Results {
+					byID[r.Sample.ID] = r
+				}
+				for _, r := range report.Results {
+					byID[r.Sample.ID] = r
+				}
+				merged := make([]core.EvalResult, 0, len(mergeReport.Results))
+				for _, r := range mergeReport.Results {
+					merged = append(merged, byID[r.Sample.ID])
+				}
+				mergeReport.Results = merged
+				mergeReport.Metrics = core.CalculateMetrics(merged)
+				mergeReport.FinishedAt = time.Now()
+				report = *mergeReport
+			}
 			if report.Metadata == nil {
 				report.Metadata = map[string]string{}
 			}
@@ -268,6 +313,7 @@ func newEvalCommand() *cobra.Command {
 	cmd.Flags().DurationVar(&sampleTimeout, "sample-timeout", 60*time.Second, "per-sample timeout")
 	cmd.Flags().IntVar(&maxTotalTokens, "max-total-tokens", 0, "max total tokens budget (0 = unlimited)")
 	cmd.Flags().BoolVar(&noCache, "no-cache", false, "disable response cache")
+	cmd.Flags().StringVar(&retryLogPath, "retry", "", "path to existing .eval or .json log to retry failed samples only")
 
 	return cmd
 }

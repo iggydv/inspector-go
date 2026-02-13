@@ -711,3 +711,182 @@ func generateID() string {
 	// Encode to base58-like string (using base64 URL encoding without padding)
 	return base64.RawURLEncoding.EncodeToString(b)
 }
+
+func ReadJSON(path string) (EvalLog, error) {
+	var log EvalLog
+	f, err := os.Open(path)
+	if err != nil {
+		return EvalLog{}, err
+	}
+	defer f.Close()
+	if err := json.NewDecoder(f).Decode(&log); err != nil {
+		return EvalLog{}, err
+	}
+	return log, nil
+}
+
+func ReadEval(path string) (EvalLog, error) {
+	r, err := zip.OpenReader(path)
+	if err != nil {
+		return EvalLog{}, err
+	}
+	defer r.Close()
+
+	var header EvalLog
+	for _, f := range r.File {
+		if f.Name == "header.json" {
+			rc, err := f.Open()
+			if err != nil {
+				return EvalLog{}, err
+			}
+			err = json.NewDecoder(rc).Decode(&header)
+			rc.Close()
+			if err != nil {
+				return EvalLog{}, err
+			}
+			break
+		}
+	}
+
+	if header.Samples == nil {
+		header.Samples = []EvalSample{}
+	}
+	for _, f := range r.File {
+		if dir := filepath.Dir(f.Name); dir != "samples" || filepath.Ext(f.Name) != ".json" {
+			continue
+		}
+		rc, err := f.Open()
+		if err != nil {
+			return EvalLog{}, err
+		}
+		var sample EvalSample
+		decodeErr := json.NewDecoder(rc).Decode(&sample)
+		rc.Close()
+		if decodeErr != nil {
+			return EvalLog{}, decodeErr
+		}
+		header.Samples = append(header.Samples, sample)
+	}
+	return header, nil
+}
+
+func FailedSamples(log EvalLog) []core.Sample {
+	var out []core.Sample
+	for _, s := range log.Samples {
+		if s.Error != nil || (s.Output.Completion == "" && s.Error == nil) {
+			meta := map[string]string{}
+			if s.Metadata != nil {
+				for k, v := range s.Metadata {
+					if str, ok := v.(string); ok {
+						meta[k] = str
+					}
+				}
+			}
+			out = append(out, core.Sample{
+				ID:       fmt.Sprintf("%d", s.ID),
+				Input:    s.Input,
+				Expected: s.Target,
+				Metadata: meta,
+			})
+		}
+	}
+	return out
+}
+
+func LogToReport(log EvalLog) core.EvalReport {
+	scoreName := log.Eval.Model
+	if len(log.Eval.Scorers) > 0 {
+		if m, ok := log.Eval.Scorers[0].(map[string]any); ok {
+			if n, _ := m["name"].(string); n != "" {
+				scoreName = n
+			}
+		}
+	}
+	results := make([]core.EvalResult, 0, len(log.Samples))
+	var totalUsage core.TokenUsage
+	for _, s := range log.Samples {
+		usage := core.TokenUsage{}
+		if s.ModelUsage != nil {
+			for _, u := range s.ModelUsage {
+				usage.PromptTokens += u.InputTokens
+				usage.CompletionTokens += u.OutputTokens
+				usage.TotalTokens += u.TotalTokens
+				break
+			}
+		}
+		totalUsage.PromptTokens += usage.PromptTokens
+		totalUsage.CompletionTokens += usage.CompletionTokens
+		totalUsage.TotalTokens += usage.TotalTokens
+		scoreVal := 0.0
+		passed := false
+		if s.Scores != nil {
+			for _, sc := range s.Scores {
+				if v, ok := sc.Value.(float64); ok {
+					scoreVal = v
+				}
+				if v, ok := sc.Value.(string); ok && (v == "C" || v == "c") {
+					passed = true
+					scoreVal = 1.0
+				}
+				break
+			}
+		}
+		errStr := ""
+		if s.Error != nil {
+			errStr = s.Error.Message
+		}
+		dur := time.Duration(0)
+		if s.TotalTime > 0 {
+			dur = time.Duration(s.TotalTime * float64(time.Second))
+		}
+		meta := map[string]string{}
+		if s.Metadata != nil {
+			for k, v := range s.Metadata {
+				if str, ok := v.(string); ok {
+					meta[k] = str
+				}
+			}
+		}
+		results = append(results, core.EvalResult{
+			Sample: core.Sample{
+				ID:       fmt.Sprintf("%d", s.ID),
+				Input:    s.Input,
+				Expected: s.Target,
+				Metadata: meta,
+			},
+			Response: core.Response{
+				Content:    s.Output.Completion,
+				TokenUsage: usage,
+				Latency:    dur,
+			},
+			Score: core.Score{
+				Value:  scoreVal,
+				Max:    1,
+				Passed: passed,
+			},
+			Error:    errStr,
+			Duration: dur,
+		})
+	}
+	metrics := core.Metrics{}
+	if len(results) > 0 {
+		metrics = core.CalculateMetrics(results)
+	}
+	const timeLayout = "2006-01-02T15:04:05-07:00"
+	var startedAt, finishedAt time.Time
+	if t, err := time.Parse(timeLayout, log.Stats.StartedAt); err == nil {
+		startedAt = t
+	}
+	if t, err := time.Parse(timeLayout, log.Stats.CompletedAt); err == nil {
+		finishedAt = t
+	}
+	return core.EvalReport{
+		TaskName:   log.Eval.Task,
+		ModelName:  log.Eval.Model,
+		ScorerName: scoreName,
+		Metrics:    metrics,
+		Results:    results,
+		StartedAt:  startedAt,
+		FinishedAt: finishedAt,
+	}
+}
