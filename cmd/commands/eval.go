@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"inspectgo/pkg/cache"
 	"inspectgo/pkg/core"
 	"inspectgo/pkg/dataset"
 	"inspectgo/pkg/inspectlog"
@@ -44,6 +45,7 @@ func newEvalCommand() *cobra.Command {
 		topP           float64
 		sampleTimeout  time.Duration
 		maxTotalTokens int
+		noCache        bool
 	)
 
 	cmd := &cobra.Command{
@@ -160,6 +162,19 @@ func newEvalCommand() *cobra.Command {
 				return fmt.Errorf("unknown provider: %s", providerResolved)
 			}
 
+			if !noCache && providerResolved != "mock" {
+				cacheDir := appConfig.CacheDir
+				var cacheTTL time.Duration
+				if appConfig.CacheTTLHours > 0 {
+					cacheTTL = time.Duration(appConfig.CacheTTLHours) * time.Hour
+				}
+				c, err := cache.New(cacheDir, cacheTTL)
+				if err != nil {
+					return err
+				}
+				evalModel = model.CachedModel{Model: evalModel, Cache: c}
+			}
+
 			opts := core.GenerateOptions{
 				Temperature: float32(temperature),
 				MaxTokens:   maxTokens,
@@ -252,6 +267,7 @@ func newEvalCommand() *cobra.Command {
 	cmd.Flags().Float64Var(&topP, "top-p", 0, "nucleus sampling top-p (0 = default)")
 	cmd.Flags().DurationVar(&sampleTimeout, "sample-timeout", 60*time.Second, "per-sample timeout")
 	cmd.Flags().IntVar(&maxTotalTokens, "max-total-tokens", 0, "max total tokens budget (0 = unlimited)")
+	cmd.Flags().BoolVar(&noCache, "no-cache", false, "disable response cache")
 
 	return cmd
 }

@@ -7,17 +7,19 @@ import (
 )
 
 type Config struct {
-	Dataset   string          `mapstructure:"dataset"`
-	Scorer    string          `mapstructure:"scorer"`
-	Workers   int             `mapstructure:"workers"`
-	Output    string          `mapstructure:"output"`
-	Format    string          `mapstructure:"format"`
-	LogDir    string          `mapstructure:"log_dir"`
-	LogFormat string          `mapstructure:"log_format"`
-	Provider  string          `mapstructure:"provider"`
-	Model     ModelConfig     `mapstructure:"model"`
-	OpenAI    OpenAIConfig    `mapstructure:"openai"`
-	Anthropic AnthropicConfig `mapstructure:"anthropic"`
+	Dataset    string          `mapstructure:"dataset"`
+	Scorer     string          `mapstructure:"scorer"`
+	Workers    int             `mapstructure:"workers"`
+	Output     string          `mapstructure:"output"`
+	Format     string          `mapstructure:"format"`
+	LogDir     string          `mapstructure:"log_dir"`
+	LogFormat  string          `mapstructure:"log_format"`
+	Provider   string          `mapstructure:"provider"`
+	Model      ModelConfig     `mapstructure:"model"`
+	OpenAI     OpenAIConfig    `mapstructure:"openai"`
+	Anthropic  AnthropicConfig `mapstructure:"anthropic"`
+	CacheDir     string `mapstructure:"cache_dir"`
+	CacheTTLHours int    `mapstructure:"cache_ttl_hours"`
 }
 
 type ModelConfig struct {
