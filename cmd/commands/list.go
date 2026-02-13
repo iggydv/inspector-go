@@ -15,7 +15,7 @@ func newListCommand() *cobra.Command {
 			writeList("Models", []string{"mock"})
 			writeList("Scorers", []string{"exact", "includes"})
 			writeList("Solvers", []string{"basic", "chain-of-thought", "few-shot", "multi-step", "self-consistency", "tool-use"})
-			writeList("Providers", []string{"mock", "openai", "anthropic"})
+			writeList("Providers", []string{"mock", "openai", "anthropic", "ollama"})
 			writeList("Formats", []string{"table", "json", "html", "markdown", "csv"})
 			return nil
 		},

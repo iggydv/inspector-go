@@ -79,6 +79,8 @@ func newEvalCommand() *cobra.Command {
 					modelResolved = "gpt-4o-mini"
 				case "anthropic":
 					modelResolved = "claude-3-5-haiku-latest"
+				case "ollama":
+					modelResolved = "llama2"
 				default:
 					modelResolved = "mock"
 				}
@@ -186,6 +188,12 @@ func newEvalCommand() *cobra.Command {
 					anthropicModel.MaxTokens = anthropicCfg.MaxTokens
 				}
 				evalModel = anthropicModel
+			case "ollama":
+				ollamaModel, err := model.NewOllamaModel("", modelResolved)
+				if err != nil {
+					return err
+				}
+				evalModel = *ollamaModel
 			default:
 				return fmt.Errorf("unknown provider: %s", providerResolved)
 			}
@@ -299,7 +307,7 @@ func newEvalCommand() *cobra.Command {
 	cmd.Flags().StringVar(&format, "format", "", "output format (table, json, html, markdown, csv)")
 	cmd.Flags().StringVar(&modelName, "model", "", "model name (mock)")
 	cmd.Flags().StringVar(&mockResponse, "mock-response", "", "fixed mock response")
-	cmd.Flags().StringVar(&provider, "provider", "", "model provider (mock, openai)")
+		cmd.Flags().StringVar(&provider, "provider", "", "model provider (mock, openai, anthropic, ollama)")
 	cmd.Flags().IntVar(&fewshotCount, "fewshot", 0, "number of few-shot examples")
 	cmd.Flags().Float64Var(&rateLimitRPS, "rate-limit-rps", 0, "max requests per second (0 = unlimited)")
 	cmd.Flags().IntVar(&rateLimitBurst, "rate-limit-burst", 1, "rate limit burst size")
