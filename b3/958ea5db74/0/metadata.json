@@ -1,0 +1,33 @@
+{
+  "cli_version": "0.4.3",
+  "checkpoint_id": "b3958ea5db74",
+  "session_id": "unknown",
+  "strategy": "manual-commit",
+  "created_at": "2026-02-13T08:54:49.682732Z",
+  "branch": "main",
+  "checkpoints_count": 2,
+  "files_touched": [
+    "examples/red-team-sycophancy/dataset.jsonl",
+    "pkg/scorer/honesty.go",
+    "pkg/scorer/model_graded.go",
+    "pkg/solver/sycophancy.go"
+  ],
+  "agent": "Claude Code",
+  "token_usage": {
+    "input_tokens": 0,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 0,
+    "output_tokens": 0,
+    "api_call_count": 0
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-02-13T08:54:49.653029Z",
+    "agent_lines": 223,
+    "human_added": 151,
+    "human_modified": 65,
+    "human_removed": 0,
+    "total_committed": 419,
+    "agent_percentage": 53.22195704057279
+  },
+  "transcript_path": ".cursor/projects/Users-ignatiusdevilliers-Development-inspector-go/agent-transcripts/0330c32b-a9bd-47bc-9bf4-c5aabcc12c73.txt"
+}
